@@ -4,7 +4,36 @@ A lightweight, standalone, single-file local API client and Postman alternative.
 
 ## 🚀 Features
 
-- **Single-File Architecture (`app.py`)**: The entire backend, SQLite database logic, execution engine, and responsive UI are contained in one file with **zero external CDN dependencies** (runs 100% offline).
+## 📁 Project Architecture
+
+```text
+postmini/
+├── backend/
+│   ├── __init__.py           # Flask app factory & blueprint registration
+│   ├── config.py             # App & SQLite path configuration
+│   ├── models.py             # Project & ApiRequest database models
+│   ├── routes/
+│   │   ├── api.py            # REST API endpoints (CRUD, execute, import)
+│   │   └── views.py          # Web view routes (serves HTML)
+│   └── services/
+│       ├── executor.py       # Python requests execution engine
+│       └── importer.py       # Postman & PostMini collection parser
+├── frontend/
+│   ├── static/
+│   │   ├── css/
+│   │   │   └── style.css     # Dark-theme styling & responsive design
+│   │   └── js/
+│   │       ├── api.js        # Backend API communication module
+│   │       ├── app.js        # Main UI state & request builder logic
+│   │       └── docs.js       # AI prompt copy & sample import helpers
+│   └── templates/
+│       └── index.html        # Clean HTML5 markup
+├── app.py                    # Application entrypoint (`python app.py`)
+├── postmini.db               # SQLite database file (auto-generated)
+├── requirements.txt
+└── .gitignore
+```
+
 - **Import Collections**:
   - **Direct Postman Export Support**: Upload or paste any standard Postman v2.0 or v2.1 export `.json` directly (folders are flattened automatically, URLs, headers, and bodies preserved).
   - **Clean PostMini Schema**: Simple, lightweight JSON format.
@@ -50,13 +79,4 @@ Visit [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 ---
 
-## 📦 Pushing to GitHub
-
-```bash
-git init
-git add .
-git commit -m "Initial commit of PostMini"
-git branch -M main
-git remote add origin https://github.com/<your-username>/<your-repo-name>.git
-git push -u origin main
 ```

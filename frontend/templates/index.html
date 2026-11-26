@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PostMini - Modern API Client</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <!-- Left Sidebar: Projects & Requests -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        <span>PostMini</span>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-sm btn-secondary" onclick="openImportModal()" title="Import Collection JSON">📥 Import</button>
+        <button class="btn btn-sm" onclick="openNewProjectModal()" title="New Project">+ Project</button>
+      </div>
+    </div>
+
+    <div class="sidebar-body" id="projectsList">
+      <!-- Populated via JS -->
+    </div>
+  </aside>
+
+  <!-- Main View Area -->
+  <main class="main" id="mainContainer">
+    <!-- Top Navigation Header -->
+    <header class="top-nav">
+      <div class="nav-tabs">
+        <button class="nav-tab-btn active" id="navBtnClient" onclick="switchMainView('client')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+          API Workspace
+        </button>
+        <button class="nav-tab-btn" id="navBtnDocs" onclick="switchMainView('docs')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+          Docs & AI Prompts
+        </button>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="openImportModal()">📥 Import Collection</button>
+    </header>
+
+    <!-- VIEW 1: API Workspace (Request Builder & Response) -->
+    <div id="viewClient" class="view-pane active">
+      <div id="noSelectionState" class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <h3>No Request Selected</h3>
+        <p>Select a project and request from the sidebar, or create/import one to start testing.</p>
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+          <button class="btn btn-sm" onclick="openNewProjectModal()">+ Create Project</button>
+          <button class="btn btn-sm btn-secondary" onclick="openImportModal()">📥 Import Collection</button>
+        </div>
+      </div>
+
+      <div id="activeRequestContainer" style="display: none; height: 100%; flex-direction: column;">
+        <!-- Top Action Bar -->
+        <div class="top-bar">
+          <input type="text" id="requestName" class="req-name-input" value="Untitled Request" placeholder="Request Name" onchange="autoSaveCurrentRequest()">
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" onclick="saveCurrentRequest()">Save</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCurrentRequest()">Delete</button>
+          </div>
+        </div>
+
+        <!-- Request Builder: Method, URL, Send -->
+        <div class="request-builder">
+          <div class="url-bar">
+            <select id="requestMethod" class="select-method" onchange="autoSaveCurrentRequest()">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+              <option value="PATCH">PATCH</option>
+              <option value="HEAD">HEAD</option>
+              <option value="OPTIONS">OPTIONS</option>
+            </select>
+            <div class="url-input-container">
+              <input type="text" id="requestUrl" class="url-input" placeholder="https://api.example.com/users or {{baseUrl}}/users" onkeydown="handleUrlKeydown(event)" onchange="autoSaveCurrentRequest()">
+            </div>
+            <button class="btn btn-run" id="btnRun" onclick="runRequest()">
+              <span>Run</span>
+            </button>
+          </div>
+
+          <div class="url-hint">
+            <span>Tip: Use <code>{{baseUrl}}</code> or start URL with <code>/</code> to use project base URL. Shortcut: <code>Ctrl + Enter</code> to run.</span>
+          </div>
+
+          <!-- Request Tabs (Params, Headers, Body) -->
+          <div class="tabs-container">
+            <button class="tab-btn active" onclick="switchReqTab('params')">Params <span id="paramsCount"></span></button>
+            <button class="tab-btn" onclick="switchReqTab('headers')">Headers <span id="headersCount"></span></button>
+            <button class="tab-btn" onclick="switchReqTab('body')">Body</button>
+          </div>
+
+          <!-- Tab 1: Query Params -->
+          <div id="tab-params" class="tab-pane active">
+            <table class="kv-table" id="paramsTable">
+              <thead>
+                <tr>
+                  <th style="width: 32px;"></th>
+                  <th style="width: 45%;">Key</th>
+                  <th style="width: 45%;">Value</th>
+                  <th style="width: 32px;"></th>
+                </tr>
+              </thead>
+              <tbody id="paramsTableBody"></tbody>
+            </table>
+            <button class="btn btn-secondary btn-sm" style="margin-top: 8px;" onclick="addKvRow('paramsTableBody')">+ Add Parameter</button>
+          </div>
+
+          <!-- Tab 2: Headers -->
+          <div id="tab-headers" class="tab-pane">
+            <table class="kv-table" id="headersTable">
+              <thead>
+                <tr>
+                  <th style="width: 32px;"></th>
+                  <th style="width: 45%;">Header Key</th>
+                  <th style="width: 45%;">Header Value</th>
+                  <th style="width: 32px;"></th>
+                </tr>
+              </thead>
+              <tbody id="headersTableBody"></tbody>
+            </table>
+            <button class="btn btn-secondary btn-sm" style="margin-top: 8px;" onclick="addKvRow('headersTableBody')">+ Add Header</button>
+          </div>
+
+          <!-- Tab 3: Request Body -->
+          <div id="tab-body" class="tab-pane">
+            <div class="body-type-selector">
+              <label><input type="radio" name="bodyType" value="none" checked onchange="toggleBodyType('none')"> <span>None</span></label>
+              <label><input type="radio" name="bodyType" value="raw_json" onchange="toggleBodyType('raw_json')"> <span>Raw JSON</span></label>
+              <label><input type="radio" name="bodyType" value="form_data" onchange="toggleBodyType('form_data')"> <span>Form Data</span></label>
+            </div>
+
+            <div id="bodyTypeNone" style="color: var(--text-muted); font-size: 0.85rem; padding: 12px 0;">
+              This request has no body payload.
+            </div>
+
+            <div id="bodyTypeJson" style="display: none;">
+              <div style="display: flex; justify-content: flex-end; margin-bottom: 6px;">
+                <button class="btn btn-secondary btn-sm" onclick="beautifyJsonBody()">Beautify JSON</button>
+              </div>
+              <textarea id="bodyRawJson" class="code-editor" placeholder='{\n  "key": "value"\n}' onchange="autoSaveCurrentRequest()"></textarea>
+            </div>
+
+            <div id="bodyTypeFormData" style="display: none;">
+              <table class="kv-table" id="formDataTable">
+                <thead>
+                  <tr>
+                    <th style="width: 32px;"></th>
+                    <th style="width: 45%;">Key</th>
+                    <th style="width: 45%;">Value</th>
+                    <th style="width: 32px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="formDataTableBody"></tbody>
+              </table>
+              <button class="btn btn-secondary btn-sm" style="margin-top: 8px;" onclick="addKvRow('formDataTableBody')">+ Add Field</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Response Panel -->
+        <div class="response-section">
+          <div class="response-header">
+            <div class="tabs-container" style="border: none;">
+              <button class="tab-btn active" onclick="switchRespTab('body')">Response Body</button>
+              <button class="tab-btn" onclick="switchRespTab('headers')">Response Headers <span id="respHeadersCount"></span></button>
+            </div>
+            <div class="response-metrics" id="responseMetrics">
+              <span style="color: var(--text-muted);">No response yet</span>
+            </div>
+          </div>
+
+          <div class="response-body-container">
+            <div id="resp-tab-body">
+              <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;" id="copyRespBtnContainer">
+                <button class="btn btn-secondary btn-sm" onclick="copyResponseBody()">Copy Response</button>
+              </div>
+              <pre class="response-pre" id="responseBodyDisplay"><span style="color: var(--text-muted);">Execute this request to see the response.</span></pre>
+            </div>
+
+            <div id="resp-tab-headers" style="display: none;">
+              <table class="kv-table">
+                <thead>
+                  <tr>
+                    <th style="width: 40%;">Header</th>
+                    <th style="width: 60%;">Value</th>
+                  </tr>
+                </thead>
+                <tbody id="respHeadersTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: Documentation & AI Conversion Prompts -->
+    <div id="viewDocs" class="view-pane">
+      <div class="docs-container">
+        <div class="docs-header">
+          <div>
+            <h1 style="font-size: 1.5rem; margin-bottom: 6px;">📖 PostMini Documentation & Prompt Helper</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Learn the clean, portable JSON collection format or use the AI prompt below to convert any Postman, cURL, or OpenAPI collection instantly.</p>
+          </div>
+          <button class="btn" onclick="openImportModal()">📥 Open Import Dialog</button>
+        </div>
+
+        <!-- Section 1: AI Prompt -->
+        <div class="docs-card">
+          <h3>
+            <span>🤖 Reusable AI Conversion Prompt</span>
+            <button class="btn btn-secondary btn-sm" onclick="copyPromptText()">📋 Copy Prompt</button>
+          </h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
+            Copy this prompt into ChatGPT, Claude, Gemini, or any LLM alongside your Postman export, OpenAPI specification, or cURL list to convert it cleanly into PostMini JSON:
+          </p>
+          <div class="prompt-box" id="aiPromptText">You are an API conversion assistant. Convert the provided API endpoints/collection (Postman, OpenAPI, cURL, or documentation) into the clean PostMini collection format.
+
+Output ONLY a valid JSON object matching this exact schema:
+{
+  "name": "<Project Name>",
+  "base_url": "<Base URL without trailing slash, e.g. https://api.example.com>",
+  "requests": [
+    {
+      "name": "<Descriptive Name of Request>",
+      "method": "GET | POST | PUT | DELETE | PATCH",
+      "url": "<URL using {{baseUrl}}/path or full URL>",
+      "headers": [
+        {"key": "Header-Name", "value": "Header-Value", "enabled": true}
+      ],
+      "params": [
+        {"key": "query_param_key", "value": "query_param_val", "enabled": true}
+      ],
+      "body_type": "none | raw_json | form_data",
+      "body_raw": "<Stringified JSON payload if body_type is raw_json, else empty>",
+      "body_form": [
+        {"key": "field_name", "value": "field_val", "enabled": true}
+      ]
+    }
+  ]
+}
+
+Conversion Rules:
+1. Extract repeating hostnames into "base_url" and reference them in URLs as "{{baseUrl}}/path".
+2. If the request has a JSON body, set "body_type": "raw_json" and place formatted JSON in "body_raw". Ensure a "Content-Type": "application/json" header is included.
+3. If the request has form fields, set "body_type": "form_data" and place fields in "body_form".
+4. Do not include markdown formatting or commentary outside of the JSON block.
+
+Here is the API collection/endpoints to convert:
+[PASTE YOUR POSTMAN COLLECTION / CURL / SPEC HERE]</div>
+        </div>
+
+        <!-- Section 2: Interactive Sample Collection -->
+        <div class="docs-card">
+          <h3>
+            <span>📦 Sample Collection: E-Commerce & Auth API</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" onclick="copySampleJson()">Copy JSON</button>
+              <button class="btn btn-sm" onclick="importSampleDirectly()">✨ Import This Sample</button>
+            </div>
+          </h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
+            Click <b>Import This Sample</b> to load this fully configured multi-endpoint project right into your PostMini workspace:
+          </p>
+          <div class="prompt-box" id="sampleJsonText" style="max-height: 280px; overflow-y: auto;">{
+  "name": "DummyJSON Store API",
+  "base_url": "https://dummyjson.com",
+  "requests": [
+    {
+      "name": "Get All Products",
+      "method": "GET",
+      "url": "{{baseUrl}}/products",
+      "headers": [
+        {"key": "Accept", "value": "application/json", "enabled": true}
+      ],
+      "params": [
+        {"key": "limit", "value": "10", "enabled": true},
+        {"key": "skip", "value": "0", "enabled": true}
+      ],
+      "body_type": "none",
+      "body_raw": ""
+    },
+    {
+      "name": "Search Products",
+      "method": "GET",
+      "url": "{{baseUrl}}/products/search",
+      "headers": [],
+      "params": [
+        {"key": "q", "value": "phone", "enabled": true}
+      ],
+      "body_type": "none",
+      "body_raw": ""
+    },
+    {
+      "name": "Add New Product",
+      "method": "POST",
+      "url": "{{baseUrl}}/products/add",
+      "headers": [
+        {"key": "Content-Type", "value": "application/json", "enabled": true}
+      ],
+      "params": [],
+      "body_type": "raw_json",
+      "body_raw": "{\n  \"title\": \"Wireless Headphones\",\n  \"price\": 89.99,\n  \"category\": \"electronics\"\n}"
+    },
+    {
+      "name": "Delete Product",
+      "method": "DELETE",
+      "url": "{{baseUrl}}/products/1",
+      "headers": [],
+      "params": [],
+      "body_type": "none",
+      "body_raw": ""
+    }
+  ]
+}</div>
+        </div>
+
+        <!-- Section 3: Direct Postman Compatibility -->
+        <div class="docs-card">
+          <h3><span>⚡ Direct Postman v2.0 / v2.1 Import</span></h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.6;">
+            PostMini also has a built-in Postman parser! You don't even have to convert standard Postman files:
+          </p>
+          <ul style="color: var(--text-muted); font-size: 0.85rem; padding-left: 20px; line-height: 1.8; margin-top: 8px;">
+            <li>In Postman, click on your collection &gt; <b>Export</b> &gt; <b>Collection v2.1 (recommended)</b>.</li>
+            <li>Click <b>📥 Import</b> in PostMini, choose the <code>.json</code> file (or paste its content), and click <b>Import Collection</b>.</li>
+            <li>PostMini automatically flattens folders, preserves URLs, query params, headers, and bodies!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal: Create / Edit Project -->
+  <div class="modal-backdrop" id="projectModal">
+    <div class="modal">
+      <h3 id="modalProjectTitle">Create New Project</h3>
+      <div class="modal-group">
+        <label for="projectNameInput">Project Name</label>
+        <input type="text" id="projectNameInput" placeholder="e.g. Auth Service">
+      </div>
+      <div class="modal-group">
+        <label for="projectBaseUrlInput">Base URL (optional)</label>
+        <input type="text" id="projectBaseUrlInput" placeholder="e.g. https://api.example.com">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeProjectModal()">Cancel</button>
+        <button class="btn" onclick="submitProjectModal()">Save Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Import Collection -->
+  <div class="modal-backdrop" id="importModal">
+    <div class="modal">
+      <h3>📥 Import Collection</h3>
+      <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
+        Upload a JSON file or paste a collection in <b>PostMini format</b> or standard <b>Postman v2.0/v2.1 export</b>.
+      </p>
+
+      <div class="modal-group">
+        <label for="importFileInput">Select .JSON file</label>
+        <input type="file" id="importFileInput" accept=".json" onchange="handleImportFileSelect(event)" style="font-size: 0.85rem; color: var(--text-muted);">
+      </div>
+
+      <div class="modal-group">
+        <label for="importJsonInput">Or Paste Collection JSON</label>
+        <textarea id="importJsonInput" class="code-editor" style="height: 160px;" placeholder='{\n  "name": "My API",\n  "base_url": "https://api...",\n  "requests": [...]\n}'></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+        <button class="btn" id="btnSubmitImport" onclick="submitImport()">Import Collection</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Saved!</div>
+
+  <!-- Frontend JS Modules -->
+  <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/docs.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
